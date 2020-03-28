@@ -6,6 +6,8 @@ import telebot
 
 import pyqrcode
 
+import messages as msg
+
 
 token = os.environ.get('TOKEN')
 domain = os.environ.get('DOMAIN')
@@ -33,18 +35,37 @@ def setWH():
     return '!', 200
 
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def start(message):
-    bot.send_message(message.chat.id, 'Send me a text, so I turned it into a QR code.')
+    bot.send_message(message.chat.id, msg.en['start'])
 
 
-@bot.message_handler(content_types=['text'])
-def act(message):
+@bot.message_handler(commands=['generate'])
+def generate(message):
+    text = msg.en['generate']
+    answer = bot.send_message(message.chat.id, text)
+    bot.register_next_step_handler(answer, generate_settings)
+
+
+def generate_settings(message):
     chat_id_str = str(message.chat.id)
-    result = pyqrcode.create(message.text)
+    string = message.text
 
-    result.png(chat_id_str + '.png')
-    result.svg(chat_id_str + '.svg')
+    result = pyqrcode.create(string, error='H')
+
+    modules = 17
+    for i in range(1, result.version + 1):
+        modules += 4
+    
+    if modules < 500:
+        scale = 500 // modules
+        if modules * scale < 500:
+            scale += 1
+    else:
+        scale = 1
+
+    result.png(chat_id_str + '.png', scale=scale, quiet_zone=1)
+    result.svg(chat_id_str + '.svg', scale=scale, quiet_zone=1)
 
     png = open(chat_id_str + '.png', 'rb')
     svg = open(chat_id_str + '.svg', 'rb')
@@ -54,3 +75,28 @@ def act(message):
 
     os.remove(chat_id_str + '.png')
     os.remove(chat_id_str + '.svg')
+
+
+@bot.message_handler(content_types=['text'])
+def act(message):
+    chat_id_str = str(message.chat.id)
+    string = message.text
+
+    result = pyqrcode.create(string, error='H')
+
+    modules = 17
+    for i in range(1, result.version + 1):
+        modules += 4
+    
+    if modules < 500:
+        scale = 500 // modules
+        if modules * scale < 500:
+            scale += 1
+    else:
+        scale = 1
+    
+    text = msg.en['generate_parameters'].format(scale, '1', 'black', 'white')
+    result.png(chat_id_str + '.png', scale=scale, quiet_zone=1)
+    png = open(chat_id_str + '.png', 'rb')
+    bot.send_photo(message.chat.id, png, text, parse_mode='html')
+    os.remove(chat_id_str + '.png')
