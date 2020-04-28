@@ -18,22 +18,30 @@ def settings(text):
     return markup
 
 
-def preview(language):
+def preview(user):
     markup = InlineKeyboardMarkup()
-
-    if language == 'en':
-        scale = msg.en['scale']
-        done = msg.en['done']
-    elif language == 'ru':
-        scale = msg.en['scale']
-        done = msg.en['done']
     
     scale_minus_btn = InlineKeyboardButton(u"\u2796", callback_data='scale-')
-    scale_btn = InlineKeyboardButton(scale, callback_data='scale')
+    scale_btn = InlineKeyboardButton(msg.en['scale'], callback_data='scale')
     scale_plus_btn = InlineKeyboardButton(u"\u2795", callback_data='scale+')
-    markup.add(scale_minus_btn, scale_btn, scale_plus_btn)
+    if user.scale <= 1:
+        markup.add(scale_btn, scale_plus_btn)
+    elif user.scale >= 100:
+        markup.add(scale_minus_btn, scale_btn)
+    else:
+        markup.add(scale_minus_btn, scale_btn, scale_plus_btn)
     
-    done_btn = InlineKeyboardButton(done, callback_data='done')
+    qz_minus_btn = InlineKeyboardButton(u"\u2796", callback_data='qz-')
+    qz_btn = InlineKeyboardButton(msg.en['qz'], callback_data='qz')
+    qz_plus_btn = InlineKeyboardButton(u"\u2795", callback_data='qz+')
+    if user.qz <= 0:
+        markup.add(qz_btn, qz_plus_btn)
+    elif user.qz >=4:
+        markup.add(qz_minus_btn, qz_btn)
+    else:
+        markup.add(qz_minus_btn, qz_btn, qz_plus_btn)
+    
+    done_btn = InlineKeyboardButton(msg.en['done'], callback_data='done')
     markup.add(done_btn)
 
     return markup

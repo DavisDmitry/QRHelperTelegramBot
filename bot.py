@@ -1,18 +1,18 @@
 import os
 
-from app import bot, db, token
-from models import User
-
 from telebot import types
 import pyqrcode
 from PIL import Image
+
+from app import bot, db, token
+from models import User
 
 import messages as msg
 import keyboards as kb
 
 
 def reg(chat_id, language):
-    user = User(id=chat_id, language=language)
+    user = User(id=chat_id, language=language, scale=1)
     db.session.add(user)
     db.session.commit()
     bot.send_message(chat_id, msg.en['reg'])
@@ -21,11 +21,12 @@ def reg(chat_id, language):
 def auth(chat_id):
     def decorator(func):
         def wrapper(*args, **kwargs):
-            if User.query.filter_by(id=chat_id).count() == 0:
-                text = msg.en['choose_language'] + '\n\n' + msg.ru['choose_language']
-                bot.send_message(chat_id, text, reply_markup=kb.language(), parse_mode='html')
-            else:
+            if User.query.filter_by(id=chat_id).first():
                 func(*args, **kwargs)
+            else:
+                text = msg.en['choose_language'] + '\n\n'
+                text += msg.ru['choose_language']
+                bot.send_message(chat_id, text, reply_markup=kb.language(), parse_mode='html')
         return wrapper
     return decorator
 
@@ -40,8 +41,8 @@ def change_language(chat_id, message_id, language):
     elif language == 'ru':
         language = u"\U0001F1F7" + u"\U0001F1FA"
     text = msg.en['settings'].format(chat_id, language)
-    
-    bot.edit_message_text(text, chat_id=chat_id, message_id=message_id, parse_mode='html', reply_markup=kb.settings(msg.en['change_language']))
+    bot.edit_message_text(text, chat_id=chat_id, message_id=message_id, parse_mode='html',
+                          reply_markup=kb.settings(msg.en['change_language']))
 
 
 def generate(chat_id):
@@ -53,16 +54,17 @@ def generate(chat_id):
     class Result():
         language = user.language
 
-        if not user.scale:
+        if user.scale:
+            scale = user.scale
+        else:
             scale = 1
             User.query.filter_by(id=chat_id).update({'scale': scale})
-        else:
-            scale = user.scale
         
-        if not user.qz:
-            qz = 1
-        else:
+        if user.qz:
             qz = user.qz
+        else:
+            qz = 0
+            User.query.filter_by(id=chat_id).update({'qz': qz})
         
         if not user.color:
             color = 'black'
@@ -87,12 +89,84 @@ def generate(chat_id):
     return Result
 
 
+def set_params(id, **kwargs):
+    User.query.filter_by(id=id).update(kwargs)
+    db.session.commit()
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def get_callback(call):
     chat_id = call.message.chat.id
     message_id = call.message.message_id
+    user = User.query.filter_by(id=chat_id).first()
 
-    if User.query.filter_by(id=chat_id).count() == 0:
+    if user:
+        if call.data == 'change_language':
+            bot.edit_message_text(msg.en['choose_language'], chat_id=chat_id,
+                                  message_id=message_id, reply_markup=kb.language())
+        if call.data == 'en':
+            change_language(chat_id, message_id, 'en')
+        if call.data == 'ru':
+            change_language(chat_id, message_id, 'ru')
+        if call.data == 'scale-':
+            scale = user.scale - 1
+            set_params(chat_id, scale=scale)
+
+            bot.delete_message(chat_id, message_id)
+
+            generate2(chat_id)
+        if call.data == 'scale':
+            bot.delete_message(chat_id, message_id)
+
+            answer = bot.send_message(chat_id, msg.en['change_scale'])
+            bot.register_next_step_handler(answer, change_scale)
+        if call.data == 'scale+':
+            scale = user.scale + 1
+            set_params(chat_id, scale=scale)
+
+            bot.delete_message(chat_id, message_id)
+
+            generate2(chat_id)
+        if call.data == 'qz-':
+            qz = user.qz - 1
+            set_params(chat_id, qz=qz)
+
+            bot.delete_message(chat_id, message_id)
+
+            generate2(chat_id)
+        if call.data == 'qz':
+            bot.delete_message(chat_id, message_id)
+
+            answer = bot.send_message(chat_id, msg.en['change_qz'])
+            bot.register_next_step_handler(answer, change_qz)
+        if call.data == 'qz+':
+            qz = user.qz + 1
+            set_params(chat_id, qz=qz)
+
+            bot.delete_message(chat_id, message_id)
+
+            generate2(chat_id)
+        if call.data == 'done':
+            if user.string:
+                chat_id_str = str(chat_id)
+
+                bot.delete_message(chat_id, message_id)
+
+                data = generate(chat_id)
+                
+                bot.send_document(chat_id, data.png)
+                bot.send_document(chat_id, data.svg)
+
+                os.remove(chat_id_str + '.png')
+                os.remove(chat_id_str + '.svg')
+
+                User.query.filter_by(id=chat_id).update({'string': None,
+                                                        'scale': 1,
+                                                        'qz': 1,
+                                                        'color': None,
+                                                        'bg': None})
+                db.session.commit()
+    else:
         if call.data == 'en':
             reg(chat_id, 'en')
         elif call.data == 'ru':
@@ -100,66 +174,6 @@ def get_callback(call):
         else:
             text = msg.en['choose_language'] + '\n\n' + msg.ru['choose_language']
             bot.send_message(chat_id, text, reply_markup=kb.language(), parse_mode='html')
-    else:
-        if call.data == 'change_language':
-            bot.edit_message_text(msg.en['choose_language'], chat_id=chat_id, message_id=message_id, reply_markup=kb.language())
-        if call.data == 'en':
-            change_language(chat_id, message_id, 'en')
-        elif call.data == 'ru':
-            change_language(chat_id, message_id, 'ru')
-        if call.data == 'scale-':
-            chat_id_str = str(chat_id)
-            user = User.query.filter_by(id=chat_id).first()
-            scale = user.scale - 1
-
-            User.query.filter_by(id=chat_id).update({'scale': scale})
-            db.session.commit()
-
-            data = generate(chat_id)
-            text = text = msg.en['generate_parameters'].format(data.width, data.height, data.scale, data.qz, data.color, data.bg)
-
-            bot.edit_message_media(types.InputMediaPhoto(data.png, caption=text, parse_mode='html'),
-                                                         chat_id=chat_id, message_id=message_id,
-                                                         reply_markup=kb.preview(data.language))
-
-            os.remove(chat_id_str + '.png')
-            os.remove(chat_id_str + '.svg')
-        elif call.data == 'scale+':
-            chat_id_str = str(chat_id)
-            user = User.query.filter_by(id=chat_id).first()
-            scale = user.scale + 1
-
-            User.query.filter_by(id=chat_id).update({'scale': scale})
-            db.session.commit()
-
-            data = generate(chat_id)
-            text = text = msg.en['generate_parameters'].format(data.width, data.height, data.scale, data.qz, data.color, data.bg)
-
-            bot.edit_message_media(types.InputMediaPhoto(data.png, caption=text, parse_mode='html'),
-                                                         chat_id=chat_id, message_id=message_id,
-                                                         reply_markup=kb.preview(data.language))
-
-            os.remove(chat_id_str + '.png')
-            os.remove(chat_id_str + '.svg')
-        if call.data == 'done':
-            chat_id_str = str(chat_id)
-
-            bot.delete_message(chat_id, message_id)
-
-            data = generate(chat_id)
-            
-            bot.send_document(chat_id, data.png)
-            bot.send_document(chat_id, data.svg)
-
-            os.remove(chat_id_str + '.png')
-            os.remove(chat_id_str + '.svg')
-
-            User.query.filter_by(id=chat_id).update({'string': None,
-                                                     'scale': None,
-                                                     'qz': None,
-                                                     'color': None,
-                                                     'bg': None})
-            db.session.commit()
 
 
 @bot.message_handler(commands = ['start', 'help'])
@@ -186,7 +200,8 @@ def settings(message):
             language = u"\U0001F1F7" + u"\U0001F1FA"
         
         text = msg.en['settings'].format(chat_id, language)
-        bot.send_message(chat_id, text, reply_markup=kb.settings(msg.en['change_language']), parse_mode='html')
+        bot.send_message(chat_id, text, reply_markup=kb.settings(msg.en['change_language']),
+                         parse_mode='html')
     
     func()
 
@@ -199,26 +214,71 @@ def generate_command(message):
     def func():
         text = msg.en['generate']
         answer = bot.send_message(message.chat.id, text)
-        bot.register_next_step_handler(answer, preview)
+        bot.register_next_step_handler(answer, generate1)
     
     func()
 
 
-def preview(message):
+def generate1(message):
     chat_id = message.chat.id
-    chat_id_str = str(chat_id)
 
     @auth(chat_id)
     def func():
-        message_text = u'{}'.format(message.text)
-        User.query.filter_by(id=chat_id).update({'string': message_text, 'scale': 1})
-        db.session.commit()
+        message_text = message.text.encode('utf8').decode('latin-1')
+        set_params(chat_id, string=message_text, scale=1, qz=1)
 
-        data = generate(chat_id)
-        text = msg.en['generate_parameters'].format(data.width, data.height, data.scale, data.qz, data.color, data.bg)
-        bot.send_photo(chat_id, data.png, caption=text, reply_markup=kb.preview(data.language), parse_mode='html')
+        generate2(chat_id)
         
-        os.remove(chat_id_str + '.png')
-        os.remove(chat_id_str + '.svg')
-    
     func()
+
+
+def change_scale(message):
+    chat_id = message.chat.id
+    
+    @auth(chat_id)
+    def func():
+        try:
+            scale = int(message.text)
+            if scale < 1 or scale > 100:
+                bot.send_message(chat_id, msg.en['error'])
+                generate2(chat_id)
+            else:
+                set_params(chat_id, scale=scale)
+                generate2(chat_id)
+        except ValueError:
+            bot.send_message(chat_id, msg.en['error'])
+            generate2(chat_id)
+        
+    func()
+
+
+def change_qz(message):
+    chat_id = message.chat.id
+    
+    @auth(chat_id)
+    def func():
+        try:
+            qz = int(message.text)
+            if qz < 0 or qz > 4:
+                bot.send_message(chat_id, msg.en['error'])
+                generate2(chat_id)
+            else:
+                set_params(chat_id, qz=qz)
+                generate2(chat_id)
+        except ValueError:
+            bot.send_message(chat_id, msg.en['error'])
+            generate2(chat_id)
+        
+    func()
+
+
+def generate2(id):
+    user = User.query.filter_by(id=id).first()
+    data = generate(id)
+
+    text = msg.en['generate_parameters'].format(data.width, data.height, data.scale, data.qz,
+                                                data.color, data.bg)
+    bot.send_photo(id, data.png, caption=text, reply_markup=kb.preview(user), parse_mode='html')
+
+    os.remove(str(id) + '.png')
+    os.remove(str(id) + '.svg')
