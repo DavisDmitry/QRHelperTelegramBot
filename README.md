@@ -3,7 +3,7 @@ You can using this bot at this [link](https://t.me/qr_helper_bot).
 ## Feautures
 - Generating QR codes from text and sending them in PNG and SVG formats
 - Adjust the scale of the generated QR code
-- Adjust the quiet zone of the qr code.
+- Adjust the quiet zone of the qr code
 ## Settings
 For this bot to work, you will need to register several config vars in the settings of your Heroku application.
 
@@ -34,3 +34,5 @@ To accept requests from the Telegram Bot API, you must go to the domain of your 
 - The ability to enter a scale number
 - Add it is possible to change the size of a quiet zone
 - Fix bug with unicode characters
+### 29.04.2020
+- Add russian language

@@ -15,7 +15,8 @@ def reg(chat_id, language):
     user = User(id=chat_id, language=language, scale=1)
     db.session.add(user)
     db.session.commit()
-    bot.send_message(chat_id, msg.en['reg'])
+    user = User.query.filter_by(id=chat_id).first()
+    bot.send_message(chat_id, msg.reg[user.language])
 
 
 def auth(chat_id):
@@ -24,8 +25,7 @@ def auth(chat_id):
             if User.query.filter_by(id=chat_id).first():
                 func(*args, **kwargs)
             else:
-                text = msg.en['choose_language'] + '\n\n'
-                text += msg.ru['choose_language']
+                text = msg.choose_language['en'] + '\n\n' + msg.choose_language['ru']
                 bot.send_message(chat_id, text, reply_markup=kb.language(), parse_mode='html')
         return wrapper
     return decorator
@@ -35,14 +35,14 @@ def change_language(chat_id, message_id, language):
     User.query.filter_by(id=chat_id).update({'language': language})
     db.session.commit()
 
-    language = User.query.filter_by(id=chat_id).first().language
-    if language == 'en':
+    user = User.query.filter_by(id=chat_id).first()
+    if user.language == 'en':
         language = u"\U0001F1EC" + u"\U0001F1E7"
-    elif language == 'ru':
+    elif user.language == 'ru':
         language = u"\U0001F1F7" + u"\U0001F1FA"
-    text = msg.en['settings'].format(chat_id, language)
+    text = msg.settings[user.language].format(chat_id, language)
     bot.edit_message_text(text, chat_id=chat_id, message_id=message_id, parse_mode='html',
-                          reply_markup=kb.settings(msg.en['change_language']))
+                          reply_markup=kb.settings(user))
 
 
 def generate(chat_id):
@@ -102,7 +102,7 @@ def get_callback(call):
 
     if user:
         if call.data == 'change_language':
-            bot.edit_message_text(msg.en['choose_language'], chat_id=chat_id,
+            bot.edit_message_text(msg.choose_language[user.language], chat_id=chat_id,
                                   message_id=message_id, reply_markup=kb.language())
         if call.data == 'en':
             change_language(chat_id, message_id, 'en')
@@ -118,7 +118,7 @@ def get_callback(call):
         if call.data == 'scale':
             bot.delete_message(chat_id, message_id)
 
-            answer = bot.send_message(chat_id, msg.en['change_scale'])
+            answer = bot.send_message(chat_id, msg.change_scale[user.language])
             bot.register_next_step_handler(answer, change_scale)
         if call.data == 'scale+':
             scale = user.scale + 1
@@ -137,7 +137,7 @@ def get_callback(call):
         if call.data == 'qz':
             bot.delete_message(chat_id, message_id)
 
-            answer = bot.send_message(chat_id, msg.en['change_qz'])
+            answer = bot.send_message(chat_id, msg.change_qz[user.language])
             bot.register_next_step_handler(answer, change_qz)
         if call.data == 'qz+':
             qz = user.qz + 1
@@ -172,7 +172,7 @@ def get_callback(call):
         elif call.data == 'ru':
             reg(chat_id, 'ru')
         else:
-            text = msg.en['choose_language'] + '\n\n' + msg.ru['choose_language']
+            text = msg.choose_language[user.language] + '\n\n' + msg.choose_language[user.language]
             bot.send_message(chat_id, text, reply_markup=kb.language(), parse_mode='html')
 
 
@@ -182,7 +182,8 @@ def start(message):
 
     @auth(chat_id)
     def func():
-        bot.send_message(chat_id, msg.en['start'])
+        user = User.query.filter_by(id=chat_id).first()
+        bot.send_message(chat_id, msg.start[user.language])
     
     func()
 
@@ -193,14 +194,14 @@ def settings(message):
 
     @auth(chat_id)
     def func():
-        language = User.query.filter_by(id=chat_id).first().language
-        if language == 'en':
+        user = User.query.filter_by(id=chat_id).first()
+        if user.language == 'en':
             language = u"\U0001F1EC" + u"\U0001F1E7"
-        elif language == 'ru':
+        elif user.language == 'ru':
             language = u"\U0001F1F7" + u"\U0001F1FA"
         
-        text = msg.en['settings'].format(chat_id, language)
-        bot.send_message(chat_id, text, reply_markup=kb.settings(msg.en['change_language']),
+        text = msg.settings[user.language].format(chat_id, language)
+        bot.send_message(chat_id, text, reply_markup=kb.settings(user),
                          parse_mode='html')
     
     func()
@@ -212,7 +213,8 @@ def generate_command(message):
 
     @auth(chat_id)
     def func():
-        text = msg.en['generate']
+        user = User.query.filter_by(id=chat_id).first()
+        text = msg.generate[user.language]
         answer = bot.send_message(message.chat.id, text)
         bot.register_next_step_handler(answer, generate1)
     
@@ -237,16 +239,17 @@ def change_scale(message):
     
     @auth(chat_id)
     def func():
+        user = User.query.filter_by(id=chat_id).first()
         try:
             scale = int(message.text)
             if scale < 1 or scale > 100:
-                bot.send_message(chat_id, msg.en['error'])
+                bot.send_message(chat_id, msg.error[user.language])
                 generate2(chat_id)
             else:
                 set_params(chat_id, scale=scale)
                 generate2(chat_id)
         except ValueError:
-            bot.send_message(chat_id, msg.en['error'])
+            bot.send_message(chat_id, msg.error[user.language])
             generate2(chat_id)
         
     func()
@@ -257,16 +260,17 @@ def change_qz(message):
     
     @auth(chat_id)
     def func():
+        user = User.query.filter_by(id=chat_id).first()
         try:
             qz = int(message.text)
             if qz < 0 or qz > 4:
-                bot.send_message(chat_id, msg.en['error'])
+                bot.send_message(chat_id, msg.error[user.language])
                 generate2(chat_id)
             else:
                 set_params(chat_id, qz=qz)
                 generate2(chat_id)
         except ValueError:
-            bot.send_message(chat_id, msg.en['error'])
+            bot.send_message(chat_id, msg.error[user.language])
             generate2(chat_id)
         
     func()
@@ -276,8 +280,11 @@ def generate2(id):
     user = User.query.filter_by(id=id).first()
     data = generate(id)
 
-    text = msg.en['generate_parameters'].format(data.width, data.height, data.scale, data.qz,
-                                                data.color, data.bg)
+    text = '<b>{}:</b> {}x{}\n<b>{}:</b> {}\n<b>{}:</b> {}\n<b>{}:</b> {}\n<b>{}:</b> {}'
+    text = text.format(msg.image_size[user.language], data.width, data.height,
+                       msg.scale[user.language], data.scale, msg.qz[user.language], data.qz,
+                       msg.color[user.language], data.color, msg.backround_color[user.language],
+                       data.bg)
     bot.send_photo(id, data.png, caption=text, reply_markup=kb.preview(user), parse_mode='html')
 
     os.remove(str(id) + '.png')
