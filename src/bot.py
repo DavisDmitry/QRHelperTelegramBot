@@ -1,11 +1,9 @@
 import logging
-import os
-
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher.storage import FSMContext
 
 from config import DB_URL, TOKEN
+from handlers import register_handlers
 from middlewares import AuthMiddleware
 
 
@@ -18,14 +16,9 @@ auth_middleware = AuthMiddleware()
 logging.basicConfig(level=logging.DEBUG)
 
 
-@dp.message_handler(commands=['start'], state='*')
-async def start(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.reply('Hello, {}!'.format(message.from_user.first_name))
-
-
 async def on_startup(dp: Dispatcher):
     dp.middleware.setup(auth_middleware)
+    register_handlers(dp)
 
 
 async def on_shutdown(dp: Dispatcher):
