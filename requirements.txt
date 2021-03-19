@@ -8,7 +8,7 @@ idna==2.9
 itsdangerous==1.1.0
 Jinja2==2.11.1
 MarkupSafe==1.1.1
-Pillow==7.1.1
+Pillow==8.1.1
 PyMySQL==0.9.3
 pypng==0.0.20
 PyQRCode==1.2.1
